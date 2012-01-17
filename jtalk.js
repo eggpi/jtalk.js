@@ -175,24 +175,29 @@ function JTalk(server, user, password) {
     }
 
     /* Callback for message stanzas.
-     * May trigger "chat requested"
+     * Triggers "new message" and "new chat state".
      */
     this.onMessage = withCommonAttributes(
         function(message, attrs) {
             var body = $(message).find("body:first");
+            var c = chat(attrs.from, false);
 
             if (body.length != 0) {
-                var c = chat(attrs.from);
+                c = chat(attrs.from); // make sure the chat exists
                 var node = Strophe.getNodeFromJid(attrs.from);
+                var text = body.text();
 
-                trigger("chat requested", c._pub);
+                trigger("new message", {chat: c._pub, text: text});
                 c._addMessageToHistory(node, body.text());
             }
 
+            // select the tag corresponding to the chat state
             var s = "*[xmlns='" + Strophe.NS.CHATSTATE + "']";
-            var chatstate = $(message).find(s);
-            if (chatstate.length != 0 && chat(attrs.from, false)) {
-                chat(attrs.from)._displayChatState(chatstate.prop("tagName"));
+            var tag = $(message).find(s);
+            if (tag.length != 0 && c) {
+                var chatstate = tag.prop("tagName");
+                trigger("new chat state", {chat: c._pub, chatstate: chatstate});
+                c._displayChatState(chatstate);
             }
 
             return true;
@@ -207,7 +212,6 @@ function JTalk(server, user, password) {
         });
 
     /* Callback for roster events.
-     * Triggers the "chat requested" hook.
      */
     var roster = {};
     this.onRosterReceived = withCommonAttributes(
@@ -225,7 +229,8 @@ function JTalk(server, user, password) {
                         $("#ui-jchat-roster").append(roster[jid]);
 
                         $(roster[jid]).click(function() {
-                            trigger("chat requested", chat($(this).text()));
+                            var c = chat($(this).text());
+                            trigger("chat requested", c._pub);
                         });
                     }
                 });
