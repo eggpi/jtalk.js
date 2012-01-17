@@ -278,16 +278,15 @@ function JTalk(server, user, password) {
     }
 
     /* Trigger a hook.
-     * Returns whether or not the handler exists.
+     * Returns the return value of the handler, or null if there is no handler.
      */
     var hooks = {};
     function trigger(name, arg) {
         if (hooks[name]) {
-            hooks[name](arg);
-            return true;
+            return hooks[name](arg);
         }
 
-        return false;
+        return null;
     }
 
     /* Register Strophe callbacks */
