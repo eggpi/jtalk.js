@@ -207,6 +207,7 @@ function JTalk(server, user, password) {
     this.onSubscription = withCommonAttributes(
         function(presence, attrs) {
             // XXX blindly accept subscription
+            trigger("subscription request", attrs.from);
             connection.send($pres({to: attrs.from, type: "subscribed"}));
             return true;
         });
