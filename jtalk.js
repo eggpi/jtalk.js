@@ -69,13 +69,6 @@ function JTalk(server, user, password) {
             this.contact = contact;
             this.element = createChatWindow();
 
-            this._chatstate = null;
-            this._last_from = null;
-
-            if (!trigger("new chat window", this)) {
-                $(document.body).append(this.element);
-            }
-
             /* Unregister this chat.
              * A new window will be created for subsequent messages.
              */
@@ -83,6 +76,17 @@ function JTalk(server, user, password) {
                 // leave window cleanup to the user
                 delete _active_chats[this.contact];
             }
+
+            // create a shallow copy with only the public data above we can send
+            // to hook handlers.
+            this._pub = $.extend(new Object(), this);
+
+            if (!trigger("new chat window", this._pub)) {
+                $(document.body).append(this.element);
+            }
+
+            this._chatstate = null;
+            this._last_from = null;
 
             /* Send a message with chatstate support */
             this._sendMessage = function(message, chatstate) {
@@ -181,7 +185,7 @@ function JTalk(server, user, password) {
                 var c = chat(attrs.from);
                 var node = Strophe.getNodeFromJid(attrs.from);
 
-                trigger("chat requested", c);
+                trigger("chat requested", c._pub);
                 c._addMessageToHistory(node, body.text());
             }
 
