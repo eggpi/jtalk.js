@@ -1,0 +1,30 @@
+JTalk is a XMPP chat client written in Javascript.
+
+It provides basic chat functionality (roster retrieval, subscription handling)
+and a very basic, customizable user interface.
+
+Some aspects of JTalk's behavior are governed by hooks, to which handlers can be
+attached. Here is a list of currently supported hooks:
+
+"new chat": Triggered when a chat window is first opened.
+The handler receives a chat object and is expected to return a Boolean.
+If the return value is false, the new window is simply appended to
+document.body. Otherwise, no action is taken.
+
+"new message": Triggered when a new message is received in a chat window.
+The handler receives an object whose 'chat' attribute is a chat object, and
+whose 'text' attribute is the text of the message. The return value is ignored.
+
+"new chat state": Triggered when a new chat state (e.g. composing) is received.
+The handler receives an object whose 'chat' attribute is a chat object, and
+whose 'chatstate' attribute is the chat state received. The return value is
+ignored.
+
+"subscription request": Triggered when a subscription request is received. The
+handler receives the jid of the user that originated the subscription. The
+return value is currently ignored.
+
+"chat requested": Triggered when the user requests a chat with a contact (i.e.,
+by clicking on the contact's entry in the roster), regardless of whether a new
+chat is initiated or not. The handler receives a chat object and its return
+value is ignored.
