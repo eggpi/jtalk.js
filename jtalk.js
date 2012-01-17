@@ -6,7 +6,7 @@ function JTalk(server, user, password) {
 
     /* Get the chat with a given contact, creating it if it doesn't exist and
      * 'create' is enabled (default: true).
-     * When the chat window is first created, triggers the "new chat window"
+     * When the chat window is first created, triggers the "new chat"
      * hook.
      */
     var _active_chats = {};
@@ -81,7 +81,7 @@ function JTalk(server, user, password) {
             // to hook handlers.
             this._pub = $.extend(new Object(), this);
 
-            if (!trigger("new chat window", this._pub)) {
+            if (!trigger("new chat", this._pub)) {
                 $(document.body).append(this.element);
             }
 
