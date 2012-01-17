@@ -11,9 +11,8 @@ function JTalk(server, user, password) {
      */
     var _active_chats = {};
     function chat(contact, create) {
-
-        // the real constructor, out of sight
-        var _chat = function(contact) {
+        /* Create the chat windows' elements */
+        function createChatWindow() {
             // create the element
             var window_markup = [
                 "<div class='ui-jtalk-chat-window'>",
@@ -24,8 +23,51 @@ function JTalk(server, user, password) {
                     "</div>",
             ];
 
+            return $(window_markup.join("")).get();
+        }
+
+        /* Build a handler for keydown events in the window's text area. */
+        function keydownHandler(_self) {
+            return function(e) {
+                var message = $(this).val();
+
+                if (e.which == 13) {
+                    // return key pressed -- send message
+                    $(this).val("");
+
+                    _self._sendMessage(message, "active");
+                    _self._addMessageToHistory("me", message);
+
+                    return false;
+                }
+
+                if (e.which > 31 && !message &&
+                    _self._chatstate != "composing") {
+                    // send composing chat status, but only if this is
+                    // the first keypress of a printable character
+                    _self._sendMessage(null, "composing");
+                }
+
+                return true;
+            }
+        }
+
+        /* Build a handler for keyup events in the window's text area. */
+        function keyupHandler(_self) {
+            return function(e) {
+                if (!$(this).val() &&
+                    _self._chatstate != "active") {
+                    _self._sendMessage(null, "active");
+                }
+
+                return true;
+            }
+        }
+
+        // the real constructor, out of sight
+        var _chat = function(contact) {
             this.contact = contact;
-            this.element = $(window_markup.join("")).get();
+            this.element = createChatWindow();
 
             this._chatstate = null;
             this._last_from = null;
@@ -82,39 +124,9 @@ function JTalk(server, user, password) {
                 $(this.element).find(".ui-jtalk-chat-state").text(chatstate);
             }
 
-            // make this object accessible in JQuery callbacks
-            var _self = this;
-
             // register callbacks to handle text input
-            $(this.element).find("textarea").keydown(
-                function(e) {
-                    var message = $(this).val();
-
-                    if (e.which == 13) {
-                        // return key pressed -- send message
-                        $(this).val("");
-
-                        _self._sendMessage(message, "active");
-                        _self._addMessageToHistory("me", message);
-
-                        return false;
-                    }
-
-                    if (e.which > 31 && !message &&
-                        _self._chatstate != "composing") {
-                        // send composing chat status, but only if this is
-                        // the first keypress of a printable character
-                        _self._sendMessage(null, "composing");
-                    }
-
-                    return true;
-                }).keyup(
-                    function(e) {
-                        if (!$(this).val() &&
-                            _self._chatstate != "active") {
-                            _self._sendMessage(null, "active");
-                        }
-                });
+            $(this.element).find("textarea")
+                .keydown(keydownHandler(this)).keyup(keyupHandler(this));
         }
 
         contact = Strophe.getBareJidFromJid(contact);
