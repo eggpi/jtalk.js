@@ -26,7 +26,6 @@ function JTalk(server, user, password) {
             this.contact = contact;
             this.element = $(window_markup.join("")).get();
 
-            /* FIXME Used for both the client's and the contact's chat state */
             this._chatstate = null;
             this._last_from = null;
 
@@ -77,7 +76,8 @@ function JTalk(server, user, password) {
                 history.append(entry).scrollTop(history.height());
             }
 
-            this._setChatState = function(chatstate) {
+            /* Display the contact's chat state in the chat window */
+            this._displayChatState = function(chatstate) {
                 $(this.element).find(".ui-jtalk-chat-state").text(chatstate);
             }
 
@@ -172,7 +172,7 @@ function JTalk(server, user, password) {
             var chatstate = $(message).find(s);
             if (chatstate.length != 0) {
                 /* XXX Should not create window? */
-                chat(attrs.from)._setChatState(chatstate.prop("tagName"));
+                chat(attrs.from)._displayChatState(chatstate.prop("tagName"));
             }
 
             return true;
