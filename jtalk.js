@@ -65,7 +65,7 @@ function JTalk(server, user, password) {
         }
 
         // the real constructor, out of sight
-        var _chat = function(contact) {
+        function _chat(contact) {
             this.contact = contact;
             this.element = createChatWindow();
 
