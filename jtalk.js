@@ -4,12 +4,13 @@ function JTalk(server, user, password) {
 
     var connection = new Strophe.Connection(server);
 
-    /* Create a new chat with 'contact', or get the existing chat.
+    /* Get the chat with a given contact, creating it if it doesn't exist and
+     * 'create' is enabled (default: true).
      * When the chat window is first created, triggers the "new chat window"
      * hook.
      */
     var _active_chats = {};
-    function chat(contact) {
+    function chat(contact, create) {
 
         // the real constructor, out of sight
         var _chat = function(contact) {
@@ -118,8 +119,12 @@ function JTalk(server, user, password) {
 
         contact = Strophe.getBareJidFromJid(contact);
 
+        if (create === undefined) {
+            create = true;
+        }
+
         var c = _active_chats[contact];
-        if (!c) {
+        if (!c && Boolean(create) != false) {
             c = new _chat(contact);
             _active_chats[contact] = c;
         }
@@ -170,8 +175,7 @@ function JTalk(server, user, password) {
 
             var s = "*[xmlns='" + Strophe.NS.CHATSTATE + "']";
             var chatstate = $(message).find(s);
-            if (chatstate.length != 0) {
-                /* XXX Should not create window? */
+            if (chatstate.length != 0 && chat(attrs.from, false)) {
                 chat(attrs.from)._displayChatState(chatstate.prop("tagName"));
             }
 
