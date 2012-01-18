@@ -227,7 +227,7 @@ function JTalk(server, user, password) {
 
                     if (subs !== "remove") {
                         roster[jid] = $("<li>").append(jid);
-                        $("#ui-jchat-roster").append(roster[jid]);
+                        $("#ui-jtalk-roster").append(roster[jid]);
 
                         $(roster[jid]).click(function() {
                             var c = chat($(this).text());
