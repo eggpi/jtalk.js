@@ -77,6 +77,41 @@ function JTalk(server, user, password) {
                 delete _active_chats[this.contact];
             }
 
+            /* Get the history for this chat as an array of arrays
+             * [from, message] as displayed in the chat window.
+             */
+            this.getHistory = function() {
+                var last_from = null;
+                var history = [];
+
+                var s = ".ui-jtalk-chat-history p";
+                $(this.element).find(s).each(function() {
+                        // get the sender from the span tag, if any
+                        var from = $(this)
+                                   .find(".ui-jtalk-chat-history-from")
+                                   .text()
+                                   .slice(0, -1); // remove :
+
+                        // get the text from all nodes below the message's
+                        // paragraph, except the one with 'from'
+                        var text = $(this)
+                                   .contents()
+                                   .filter(function() {
+                                       var cls = "ui-jtalk-chat-history-from";
+                                       return !$(this).hasClass(cls);
+                                    })
+                                   .text()
+                                   .slice(!!from); // remove &nbsp, if any
+
+                        if (!from) from = last_from;
+                        last_from = from;
+
+                        history.push([from, text]);
+                    });
+
+                return history;
+            }
+
             // create a shallow copy with only the public data above we can send
             // to hook handlers.
             this._pub = $.extend(new Object(), this);
