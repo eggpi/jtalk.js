@@ -43,10 +43,12 @@ The return value, if a non-empty string, is used in the history instead of the
 original message. If the return value's boolean value is false, no message is
 added to the history. All other return values are ignored.
 
-"new chat state": Triggered when a new chat state (e.g. composing) is received.
-The handler receives an object whose 'chat' attribute is a chat object, and
-whose 'chatstate' attribute is the chat state received. The return value is
-ignored.
+"chat state received": Triggered when a new chat state (e.g. composing) is
+received. The handler receives an object whose 'chat' attribute is a chat
+object, and whose 'chatstate' attribute is the chat state received as a string.
+If the return value is a non-empty string, it is displayed in the chat window.
+If its boolean value is false, a default message is displayed.
+If its boolean value is true, no message is displayed.
 
 "subscription request": Triggered when a subscription request is received. The
 handler receives the jid of the user that originated the subscription. The

@@ -168,9 +168,28 @@ function JTalk(server, user, password) {
                 history.append(entry).scrollTop(history.height());
             }
 
-            /* Display the contact's chat state in the chat window */
+            /* Display the contact's chat state in the chat window.
+             * Triggers "chat state received"
+             */
             this._displayChatState = function(chatstate) {
-                $(this.element).find(".ui-jtalk-chat-state").text(chatstate);
+                var default_chatstate_messages = {
+                    "active": "",
+                    "inactive": this.contact + " is inactive.",
+                    "gone": "",
+                    "composing": this.contact + " is composing a message.",
+                    "paused": this.contact + " wrote a message."
+                }
+
+                var m = trigger("chat state received",
+                                {chat: c._pub, chatstate: chatstate});
+
+                if (!m) {
+                    m = default_chatstate_messages[chatstate];
+                } else if (typeof m !== "string") {
+                    return;
+                }
+
+                $(this.element).find(".ui-jtalk-chat-state").text(m);
             }
 
             // register callbacks to handle text input
@@ -220,7 +239,6 @@ function JTalk(server, user, password) {
     }
 
     /* Callback for message stanzas.
-     * Triggers "new chat state".
      */
     this.onMessage = withCommonAttributes(
         function(message, attrs) {
@@ -240,7 +258,6 @@ function JTalk(server, user, password) {
             var tag = $(message).find(s);
             if (tag.length != 0 && c) {
                 var chatstate = tag.prop("tagName");
-                trigger("new chat state", {chat: c._pub, chatstate: chatstate});
                 c._displayChatState(chatstate);
             }
 
