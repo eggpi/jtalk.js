@@ -136,11 +136,21 @@ function JTalk(server, user, password) {
                 connection.send(stanza);
             }
 
-            /* Display a message sent by 'from' in the history. */
+            /* Display a message sent by 'from' in the history.
+             * Triggers "new message".
+             */
             this._addMessageToHistory = function (from, msg) {
                 // suppress 'from' if the sender is the same as before
                 if (from == this._last_from) from = null;
                 else this._last_from = from;
+
+                // give the handler a chance to modify the message
+                var _msg = trigger("new message", {chat: this._pub, text: msg});
+                if (!_msg) return;
+
+                if (typeof _msg === "string") {
+                    msg = _msg;
+                }
 
                 // build entry for the history
                 var entry = $("<p>");
@@ -210,7 +220,7 @@ function JTalk(server, user, password) {
     }
 
     /* Callback for message stanzas.
-     * Triggers "new message" and "new chat state".
+     * Triggers "new chat state".
      */
     this.onMessage = withCommonAttributes(
         function(message, attrs) {
@@ -222,7 +232,6 @@ function JTalk(server, user, password) {
                 var node = Strophe.getNodeFromJid(attrs.from);
                 var text = body.text();
 
-                trigger("new message", {chat: c._pub, text: text});
                 c._addMessageToHistory(node, body.text());
             }
 

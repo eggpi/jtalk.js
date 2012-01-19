@@ -36,9 +36,12 @@ The handler receives a chat object and is expected to return a Boolean.
 If the return value is false, the new window is simply appended to
 document.body. Otherwise, no action is taken.
 
-"new message": Triggered when a new message is received in a chat window.
-The handler receives an object whose 'chat' attribute is a chat object, and
-whose 'text' attribute is the text of the message. The return value is ignored.
+"new message": Triggered when a new message is added to the history of a chat
+window, regardless of the sender. The handler receives an object whose 'chat'
+attribute is a chat object, and whose 'text' attribute is the message's text.
+The return value, if a non-empty string, is used in the history instead of the
+original message. If the return value's boolean value is false, no message is
+added to the history. All other return values are ignored.
 
 "new chat state": Triggered when a new chat state (e.g. composing) is received.
 The handler receives an object whose 'chat' attribute is a chat object, and
