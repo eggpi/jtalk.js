@@ -112,8 +112,8 @@ function JTalk(server, user, password) {
                 return history;
             }
 
-            // create a shallow copy with only the public data above we can send
-            // to hook handlers.
+            // create a shallow copy with only the public data above
+            // we can send to hook handlers.
             this._pub = $.extend(new Object(), this);
 
             if (!trigger("new chat", this._pub)) {
