@@ -125,7 +125,9 @@ function JTalk(server, user, password) {
 
             /* Send a message with chatstate support */
             this._sendMessage = function(message, chatstate) {
-                var stanza = $msg({to: this.contact, from: user, type: "chat"});
+                var stanza = $msg({to: this.contact.jid,
+                                   from: user,
+                                   type: "chat"});
 
                 if (message !== null) stanza.c("body", message);
                 if (chatstate !== null) {
@@ -174,10 +176,10 @@ function JTalk(server, user, password) {
             this._displayChatState = function(chatstate) {
                 var default_chatstate_messages = {
                     "active": "",
-                    "inactive": this.contact + " is inactive.",
+                    "inactive": this.contact.name + " is inactive.",
                     "gone": "",
-                    "composing": this.contact + " is composing a message.",
-                    "paused": this.contact + " wrote a message."
+                    "composing": this.contact.name + " is composing a message.",
+                    "paused": this.contact.name + " wrote a message."
                 }
 
                 var m = trigger("chat state received",
@@ -197,8 +199,6 @@ function JTalk(server, user, password) {
                 .keydown(keydownHandler(this)).keyup(keyupHandler(this));
         }
 
-        contact = Strophe.getBareJidFromJid(contact);
-
         if (create === undefined) {
             create = true;
         }
@@ -210,6 +210,73 @@ function JTalk(server, user, password) {
         }
 
         return c;
+    }
+
+    /* Constructor for contact objects.
+     * Each contact encapsulates information about a single contact
+     * in the user's roster.
+     * Given only a jid, returns the existing contact with that jid.
+     * Given also an item tag, builds a new contact with information from that
+     * tag, replaces the old contact (if any) and returns the new contact.
+     */
+    var roster = {};
+    function contact(jid, item) {
+        // the real constructor
+        function _contact(item) {
+            var contact_attrs = ["jid", "name", "group", "subscription"];
+
+            for (i = 0; i < contact_attrs.length; i++) {
+                var a = contact_attrs[i];
+                this[a] = $(item).attr(a);
+            }
+
+            if (!this.name) {
+                this.name = this.jid;
+            }
+
+            // TODO: send presence probe?
+
+            this.element = $("<li>").append(this.name).get(0);
+            $("#ui-jtalk-roster").append(this.element);
+
+            $(this.element).click(function() {
+                for (jid in roster) {
+                    var cont = roster[jid];
+
+                    if (cont.element === this) {
+                        var c = chat(cont._pub);
+                        trigger("chat requested", c._pub);
+                        break;
+                    }
+                }
+            });
+
+            /* Remove a contact from the roster */
+            this.remove = function() {
+                console.log("removing " + jid);
+                var iq = $iq({from: user,
+                              type: "set",
+                              id: iqId("roster_remove_" + this.jid)});
+                iq.c("query", {xmlns: "jabber:iq:roster"});
+                iq.c("item", {jid: this.jid, subscription: "remove"});
+
+                connection.send(iq);
+            }
+
+            this._pub = $.extend(new Object(), this);
+
+            /* Remove this contact's element from the roster list */
+            this._removeElement = function() {
+                $(this.element).remove();
+            }
+        }
+
+        jid = Strophe.getBareJidFromJid(jid);
+        if (item !== undefined) {
+            roster[jid] = new _contact(item);
+        }
+
+        return roster[jid];
     }
 
     /* A simple decorator that parses the common attributes out
@@ -243,10 +310,11 @@ function JTalk(server, user, password) {
     this.onMessage = withCommonAttributes(
         function(message, attrs) {
             var body = $(message).find("body:first");
-            var c = chat(attrs.from, false);
+            var cont = contact(attrs.from);
+            var c = chat(cont._pub, false);
 
             if (body.length != 0) {
-                c = chat(attrs.from); // make sure the chat exists
+                c = chat(cont._pub); // make sure the chat exists
                 var node = Strophe.getNodeFromJid(attrs.from);
                 var text = body.text();
 
@@ -275,34 +343,28 @@ function JTalk(server, user, password) {
 
     /* Callback for roster events.
      */
-    var roster = {};
     this.onRosterReceived = withCommonAttributes(
         function onRosterReceived(iq, attrs) {
+            console.log("roster event!");
             var s = "query[xmlns='" + Strophe.NS.ROSTER + "'] > item";
             $(iq).find(s).each(
                 function() {
                     var jid = $(this).attr("jid");
-                    var subs = $(this).attr("subscription");
 
-                    $(roster[jid]).remove();
-
-                    if (subs !== "remove") {
-                        roster[jid] = $("<li>").append(jid);
-                        $("#ui-jtalk-roster").append(roster[jid]);
-
-                        $(roster[jid]).click(function() {
-                            var c = chat($(this).text());
-                            trigger("chat requested", c._pub);
-                        });
+                    if ($(this).attr("subscription") === "remove") {
+                        contact(jid)._removeElement();
+                    } else {
+                        // force (re-)creation of the contact with new data
+                        contact(jid, this);
                     }
                 });
 
             if (attrs.type == "get" || attrs.type == "set") {
                 // send response iq to the server
                 var iq = $iq({to: server,
-                    from: attrs.to,
-                    type: "result",
-                    id: attrs.id});
+                              from: attrs.to,
+                              type: "result",
+                              id: attrs.id});
 
                 connection.send(iq);
             }
