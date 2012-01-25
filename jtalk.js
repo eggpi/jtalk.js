@@ -1,289 +1,15 @@
-function JTalk(server, user, password) {
+var JTalk = new (function() {
+    // to be used inside constructors and helper functions
+    var jtalk = this;
+
     // namespace for chat states
     Strophe.NS.CHATSTATE = "http://jabber.org/protocol/chatstates";
 
-    var connection = new Strophe.Connection(server);
-
-    /* Get the chat with a given contact, creating it if it doesn't exist and
-     * 'create' is enabled (default: true).
-     * When the chat window is first created, triggers the "new chat"
-     * hook.
-     */
-    var _active_chats = {};
-    function chat(contact, create) {
-        /* Create the chat windows' elements */
-        function createChatWindow() {
-            // create the element
-            var window_markup = [
-                "<div class='ui-jtalk-chat-window'>",
-                    "<div class='ui-jtalk-chat-history'></div>",
-                    "<div class='ui-jtalk-chat-state'></div>",
-                    "<div class='ui-jtalk-chat-textwrapper'>",
-                        "<textarea class='ui-jtalk-chat-input'></textarea>",
-                    "</div>",
-            ];
-
-            return $(window_markup.join("")).get();
-        }
-
-        /* Build a handler for keydown events in the window's text area. */
-        function keydownHandler(_self) {
-            return function(e) {
-                var message = $(this).val();
-
-                if (e.which == 13) {
-                    // return key pressed -- send message
-                    $(this).val("");
-
-                    _self._sendMessage(message, "active");
-                    _self._addMessageToHistory("me", message);
-
-                    return false;
-                }
-
-                if (e.which > 31 && !message &&
-                    _self._chatstate != "composing") {
-                    // send composing chat status, but only if this is
-                    // the first keypress of a printable character
-                    _self._sendMessage(null, "composing");
-                }
-
-                return true;
-            }
-        }
-
-        /* Build a handler for keyup events in the window's text area. */
-        function keyupHandler(_self) {
-            return function(e) {
-                if (!$(this).val() &&
-                    _self._chatstate != "active") {
-                    _self._sendMessage(null, "active");
-                }
-
-                return true;
-            }
-        }
-
-        // the real constructor, out of sight
-        function _chat(contact) {
-            this.contact = contact;
-            this.element = createChatWindow();
-
-            /* Unregister this chat.
-             * A new window will be created for subsequent messages.
-             */
-            this.unregister = function() {
-                // leave window cleanup to the user
-                delete _active_chats[this.contact];
-            }
-
-            /* Get the history for this chat as an array of arrays
-             * [from, message] as displayed in the chat window.
-             */
-            this.getHistory = function() {
-                var last_from = null;
-                var history = [];
-
-                var s = ".ui-jtalk-chat-history p";
-                $(this.element).find(s).each(function() {
-                        // get the sender from the span tag, if any
-                        var from = $(this)
-                                   .find(".ui-jtalk-chat-history-from")
-                                   .text()
-                                   .slice(0, -1); // remove :
-
-                        // get the text from all nodes below the message's
-                        // paragraph, except the one with 'from'
-                        var text = $(this)
-                                   .contents()
-                                   .filter(function() {
-                                       var cls = "ui-jtalk-chat-history-from";
-                                       return !$(this).hasClass(cls);
-                                    })
-                                   .text()
-                                   .slice(!!from); // remove &nbsp, if any
-
-                        if (!from) from = last_from;
-                        last_from = from;
-
-                        history.push([from, text]);
-                    });
-
-                return history;
-            }
-
-            // create a shallow copy with only the public data above
-            // we can send to hook handlers.
-            this._pub = $.extend(new Object(), this);
-
-            if (!trigger("new chat", this._pub)) {
-                $(document.body).append(this.element);
-            }
-
-            this._chatstate = null;
-            this._last_from = null;
-
-            /* Send a message with chatstate support */
-            this._sendMessage = function(message, chatstate) {
-                var stanza = $msg({to: this.contact.jid,
-                                   from: user,
-                                   type: "chat"});
-
-                if (message !== null) stanza.c("body", message);
-                if (chatstate !== null) {
-                    this._chatstate = chatstate;
-                    stanza.c(chatstate, {xmlns: Strophe.NS.CHATSTATE});
-                }
-
-                connection.send(stanza);
-            }
-
-            /* Display a message sent by 'from' in the history.
-             * Triggers "new message".
-             */
-            this._addMessageToHistory = function (from, msg) {
-                // suppress 'from' if the sender is the same as before
-                if (from == this._last_from) from = null;
-                else this._last_from = from;
-
-                // give the handler a chance to modify the message
-                var _msg = trigger("new message", {chat: this._pub, text: msg});
-                if (!_msg) return;
-
-                if (typeof _msg === "string") {
-                    msg = _msg;
-                }
-
-                // build entry for the history
-                var entry = $("<p>");
-                if (from) {
-                    var span = $("<span class='ui-jtalk-chat-history-from'>");
-                    span.append(from + ":");
-
-                    $(entry).append(span).append("&nbsp;");
-                }
-
-                $(entry).append(msg);
-
-                // add message to the history and scroll down
-                var history = $(this.element).find(".ui-jtalk-chat-history");
-                history.append(entry).scrollTop(history.height());
-            }
-
-            /* Display the contact's chat state in the chat window.
-             * Triggers "chat state received"
-             */
-            this._displayChatState = function(chatstate) {
-                var default_chatstate_messages = {
-                    "active": "",
-                    "inactive": this.contact.name + " is inactive.",
-                    "gone": "",
-                    "composing": this.contact.name + " is composing a message.",
-                    "paused": this.contact.name + " wrote a message."
-                }
-
-                var m = trigger("chat state received",
-                                {chat: c._pub, chatstate: chatstate});
-
-                if (!m) {
-                    m = default_chatstate_messages[chatstate];
-                } else if (typeof m !== "string") {
-                    return;
-                }
-
-                $(this.element).find(".ui-jtalk-chat-state").text(m);
-            }
-
-            // register callbacks to handle text input
-            $(this.element).find("textarea")
-                .keydown(keydownHandler(this)).keyup(keyupHandler(this));
-        }
-
-        if (create === undefined) {
-            create = true;
-        }
-
-        var c = _active_chats[contact];
-        if (!c && Boolean(create) != false) {
-            c = new _chat(contact);
-            _active_chats[contact] = c;
-        }
-
-        return c;
-    }
-
-    /* Constructor for contact objects.
-     * Each contact encapsulates information about a single contact
-     * in the user's roster.
-     * Given only a jid, returns the existing contact with that jid.
-     * Given also an item tag, builds a new contact with information from that
-     * tag, replaces the old contact (if any) and returns the new contact.
-     */
-    var roster = {};
-    function contact(jid, item) {
-        // the real constructor
-        function _contact(item) {
-            var contact_attrs = ["jid", "name", "group", "subscription"];
-
-            for (i = 0; i < contact_attrs.length; i++) {
-                var a = contact_attrs[i];
-                this[a] = $(item).attr(a);
-            }
-
-            if (!this.name) {
-                this.name = this.jid;
-            }
-
-            // TODO: send presence probe?
-
-            this.element = $("<li>").append(this.name).get(0);
-            $("#ui-jtalk-roster").append(this.element);
-
-            $(this.element).click(function() {
-                for (jid in roster) {
-                    var cont = roster[jid];
-
-                    if (cont.element === this) {
-                        var c = chat(cont._pub);
-                        trigger("chat requested", c._pub);
-                        break;
-                    }
-                }
-            });
-
-            /* Remove a contact from the roster */
-            this.remove = function() {
-                console.log("removing " + jid);
-                var iq = $iq({from: user,
-                              type: "set",
-                              id: iqId("roster_remove_" + this.jid)});
-                iq.c("query", {xmlns: "jabber:iq:roster"});
-                iq.c("item", {jid: this.jid, subscription: "remove"});
-
-                connection.send(iq);
-            }
-
-            this._pub = $.extend(new Object(), this);
-
-            /* Remove this contact's element from the roster list */
-            this._removeElement = function() {
-                $(this.element).remove();
-            }
-        }
-
-        jid = Strophe.getBareJidFromJid(jid);
-        if (item !== undefined) {
-            roster[jid] = new _contact(item);
-        }
-
-        return roster[jid];
-    }
-
-    /* A simple decorator that parses the common attributes out
-     * of XMPP stanzas.
+    /* A simple decorator for functions to be called (w)ith (c)ommon
+     * (a)ttributes, that is, with pre-parsed common XMPP stanza attributes.
      * The decorated function receives the attributes in object notation.
      */
-    function withCommonAttributes(f) {
+    function wca(f) {
         function _f(stanza) {
             var common_attrs = ["to", "from", "id", "type", "xml:lang"];
 
@@ -299,143 +25,406 @@ function JTalk(server, user, password) {
         return _f;
     }
 
-    /* Build a unique id for iq stanzas, based on a key. */
-    var time = new Date();
-    function iqId(key) {
-        return key + ":" + time.getTime();
+    /* The Events object */
+    this.Events = new (function() {
+        var events = {};
+
+        this.addHandler = function(ev, handler, priority) {
+            if (!events[ev]) {
+                events[ev] = [];
+            }
+
+            if (!priority) priority = 0;
+
+            for (i = 0; i < events[ev].length; i++) {
+                if (events[ev][i].priority > priority) break;
+            }
+
+            events[ev].splice(i, 0, {handler: handler, priority: priority});
+        }
+
+        this._trigger = function(ev) {
+            var args = Array.prototype.slice.call(arguments, 1);
+
+            if (!events[ev])
+                return null;
+
+            var result = null;
+            for (i = 0; i < events[ev].length; i++) {
+                var ret = events[ev][i].handler.apply(null, args);
+
+                if (ret === null) {
+                    events[ev].splice(i--, 1);
+                } else if (result !== null) {
+                    result = ret;
+                }
+            }
+
+            return result;
+        }
+    })();
+
+    // convenience alias
+    var trigger = this.Events._trigger;
+
+    /* Contact constructor */
+    function Contact(jid, name, group, subscription, presence) {
+        this._update = function(jid, name, group, subscription, presence) {
+            this.jid = Strophe.getBareJidFromJid(jid);
+            this.name = name ? name : null;
+            this.group = group ? group : null;
+
+            // normalize subscription to the four known values
+            switch (subscription) {
+                case "to":
+                case "from":
+                case "both":
+                case "none":
+                    this.subscription = subscription;
+                    break;
+                default:
+                    this.subscription = "none";
+                    break;
+            }
+
+            if (presence) this.presence = presence;
+            else if (!this.presence) this.presence = null;
+        }
+
+        this._update(jid, name, group, subscription, presence);
     }
 
-    /* Callback for message stanzas.
+    /* The Roster object. Created after connection. */
+    this.Roster = null;
+
+    /* Constructor for the Roster object.
+     * Requires a working connection.
      */
-    this.onMessage = withCommonAttributes(
-        function(message, attrs) {
-            var body = $(message).find("body:first");
-            var cont = contact(attrs.from);
-            var c = chat(cont._pub, false);
+    function Roster() {
+        var roster = {};
 
-            if (body.length != 0) {
-                c = chat(cont._pub); // make sure the chat exists
-                var node = Strophe.getNodeFromJid(attrs.from);
-                var text = body.text();
-
-                c._addMessageToHistory(node, body.text());
+        this.get = function() {
+            if (arguments.length == 0) {
+                return roster;
             }
 
-            // select the tag corresponding to the chat state
-            var s = "*[xmlns='" + Strophe.NS.CHATSTATE + "']";
-            var tag = $(message).find(s);
-            if (tag.length != 0 && c) {
-                var chatstate = tag.prop("tagName");
-                c._displayChatState(chatstate);
+            var jid = Strophe.getBareJidFromJid(arguments[0]);
+            var contact = roster[jid];
+
+            return contact ? contact : null;
+        }
+
+        this.add = function(jid, name, group) {
+            // check whether contact already exists
+            jid = Strophe.getBareJidFromJid(jid);
+            if (roster[jid]) {
+                return roster[jid];
             }
 
-            return true;
-        });
+            var contact = new Contact(jid, name, group);
+            roster[jid] = contact;
 
-    /* Callback for subscription events */
-    this.onSubscription = withCommonAttributes(
-        function(presence, attrs) {
-            // XXX blindly accept subscription
-            trigger("subscription request", attrs.from);
-            connection.send($pres({to: attrs.from, type: "subscribed"}));
-            return true;
-        });
+            // add contact to the roster
+            var iq = $riq("set", connection.getUniqueId("roster_add"));
+            iq.c("item", {jid: jid});
 
-    /* Callback for roster events.
-     */
-    this.onRosterReceived = withCommonAttributes(
-        function onRosterReceived(iq, attrs) {
-            console.log("roster event!");
-            var s = "query[xmlns='" + Strophe.NS.ROSTER + "'] > item";
-            $(iq).find(s).each(
-                function() {
-                    var jid = $(this).attr("jid");
+            if (name) iq.attrs({name: name});
+            if (group) iq.c("group", group);
 
-                    if ($(this).attr("subscription") === "remove") {
-                        contact(jid)._removeElement();
-                    } else {
-                        // force (re-)creation of the contact with new data
-                        contact(jid, this);
-                    }
-                });
-
-            if (attrs.type == "get" || attrs.type == "set") {
-                // send response iq to the server
-                var iq = $iq({to: server,
-                              from: attrs.to,
-                              type: "result",
-                              id: attrs.id});
-
-                connection.send(iq);
-            }
-
-            return true;
-        });
-
-    /* Callback for connection */
-    this.onConnect = function(status) {
-        if (status == Strophe.Status.CONNECTED) {
-            // request roster
-            var iq = $iq({from: user,
-                type: "get",
-                id: iqId("roster")});
-            iq.c("query", {xmlns: "jabber:iq:roster"});
             connection.send(iq);
 
-            // send presence
-            connection.send($pres());
+            // request subscription to the contact's presence
+            var pres = $pres({
+                to: jid,
+                type: "subscribe"
+            });
+
+            connection.send(pres);
+
+            return contact;
+        }
+
+        this.remove = function(contact) {
+            // make sure the contact is in the roster
+            if (!roster[contact.jid]) {
+                return;
+            }
+
+            var iq = $riq("set", connection.getUniqueId("roster_remove"));
+            iq.c("item", {jid: contact.jid, subscription: "remove"});
+
+            connection.send(iq);
+        }
+
+        /* Builds and returns an iq for roster management.
+         * The returned element is of the form:
+         *
+         * <iq from type id>
+         *  <query xmlns='jabber:iq:roster'>
+         *  </query>
+         * </iq>
+         *
+         * The current node of the returned iq object is the query element.
+         */
+        function $riq(type, id) {
+            var iq = $iq({
+                from: jtalk.me.jid,
+                type: type,
+                id: id
+            });
+
+            iq.c("query", {xmlns: Strophe.NS.ROSTER});
+            return iq;
+        }
+
+        /* Handler for roster-related events */
+        var onRosterEvent = wca(
+            function(iq, attrs) {
+                // selector for roster items
+                var selector = [
+                    "query[xmlns=",
+                    Strophe.NS.ROSTER,
+                    "] > item",
+                ].join("");
+
+                $(iq).find(selector).each(
+                    function() {
+                        var jid = $(this).attr("jid");
+                        jid = Strophe.getBareJidFromJid(jid);
+
+                        var name = $(this).attr("name");
+                        var group = $(this).attr("group");
+                        var subs = $(this).attr("subscription");
+
+                        if (subs == "remove" && roster[jid]) {
+                            trigger("contact removed", roster[jid]);
+                            delete roster[jid];
+                        } else {
+                            var event = null;
+
+                            if (roster[jid]) {
+                                roster[jid]._update(jid, name, group, subs);
+                                event = "contact changed";
+                            } else {
+                                roster[jid] = new Contact(jid, name, group, subs);
+                                event = "new contact";
+                            }
+
+                            trigger(event, roster[jid]);
+                        }
+                    });
+
+                if (attrs.type == "get" || attrs.type == "set") {
+                    // send response iq to the server
+                    var reply = $iq({
+                        to: _server,
+                        from: attrs.to,
+                        type: "result",
+                        id: attrs.id
+                    });
+
+                    connection.send(reply);
+                }
+
+                return true;
+            }
+        )
+
+        var self = this;
+
+        // initial roster request
+        // use the callback manually for this first request to ensure
+        // we can use get() when triggering "roster received".
+        var request = $riq("get", connection.getUniqueId("roster_request"));
+        connection.sendIQ(request,
+            function(iq) {
+                onRosterEvent(iq);
+                trigger("roster received", self.get());
+
+                // let the callback handle further events
+                connection.addHandler(onRosterEvent, Strophe.NS.ROSTER, "iq");
+        });
+    }
+
+    this.Chat = function(contact) {
+        return new (function () {
+            var self = this;
+            var _history = [];
+            var _chatstates = {}; // jid -> chatstate
+
+            if (_active_chats[contact.jid]) {
+                return _active_chats[contact.jid];
+            }
+
+            /* Send a message with chatstate support */
+            function _send(message, chatstate) {
+                var elem = $msg({
+                    to: contact.jid,
+                    from: jtalk.me.jid,
+                    type: "chat"
+                });
+
+                if (message) elem.c("body", message);
+                if (chatstate) {
+                    elem.c(chatstate, {xmlns: Strophe.NS.CHATSTATE});
+                }
+
+                connection.send(elem);
+            }
+
+            // callback for messages sent to this chat
+            function onMessage(message) {
+                var body = $(message).find("body:first");
+
+                if (body.length != 0) {
+                    var text = body.text();
+                    var keep = trigger("incoming message",
+                                       self,
+                                       {from: contact, message: text});
+
+                    if (keep !== false) {
+                        self.history(contact.jid, text);
+                    }
+                }
+
+                // select the tag corresponding to the chat state
+                var selector = [
+                    "*[xmlns='",
+                    Strophe.NS.CHATSTATE,
+                    "']"
+                ].join("");
+
+                var tag = $(message).find(selector);
+                if (tag.length != 0) {
+                    var chatstate = tag.prop("tagName");
+                    _chatstates[contact.jid] = chatstate;
+
+                    trigger("incoming chat state",
+                            self,
+                            contact,
+                            chatstate);
+                }
+
+                return true;
+            }
+
+            this.send = function(message) {
+                _send(message, "active");
+
+                var keep = trigger("outgoing message",
+                        self,
+                        {from: jtalk.me, message: message});
+
+                if (keep !== false) {
+                    self.history(jtalk.me.jid, message);
+                }
+            }
+
+            this.state = function(obj) {
+                // try treating obj as a Contact
+                if (obj.jid) {
+                    var chatstate = _chatstates[obj.jid];
+                    return chatstate ? chatstate : null;
+                }
+
+                // assume string
+                var xep_0085_states = [
+                    "active",
+                    "inactive",
+                    "gone",
+                    "composing",
+                    "paused"
+                ];
+
+                if (xep_0085_states.indexOf(obj) >= 0) {
+                    _send(null, obj);
+                }
+            }
+
+            this.history = function() {
+                if (arguments.length == 0) {
+                    return _history;
+                }
+
+                var from = arguments[0];
+                var message = arguments[1];
+
+                _history.push({from: from, message: message});
+            }
+
+            _active_chats[contact.jid] = this;
+            connection.addHandler(onMessage,
+                                  null,
+                                  "message",
+                                  "chat",
+                                  null,
+                                  contact.jid,
+                                  {matchBare: true});
+        })();
+    }
+
+    var _user = null;
+    var _server = null;
+    var connection = null;
+    var _active_chats = {};
+
+    this.me = null;
+
+    var onMessage = wca(
+        function(message, attrs) {
+            var jid = Strophe.getBareJidFromJid(attrs.from);
+            var contact = jtalk.Roster.get(jid);
+
+            if (contact && !_active_chats[jid]) {
+                if (trigger("chat requested", contact) !== false) {
+                    /* FIXME: should trigger "incoming message" after this */
+                    jtalk.Chat(contact);
+                }
+            }
 
             return true;
         }
-    }
+    );
 
-    /* Connect to the server */
-    this.connect = function() {
-        connection.connect(user, password, this.onConnect);
-        this._registerCallbacks();
-    }
+    function onConnect(status) {
+        if (status == Strophe.Status.CONNECTED) {
+            jtalk.me = new Contact(_user);
+            jtalk.Roster = new Roster();
 
-    /* Add a handler to a hook */
-    this.addHandler = function(hook, handler) {
-        hooks[hook] = handler;
-    }
+            // send initial presence
+            connection.send($pres());
 
-    /* Trigger a hook.
-     * Returns the return value of the handler, or null if there is no handler.
-     */
-    var hooks = {};
-    function trigger(name, arg) {
-        if (hooks[name]) {
-            return hooks[name](arg);
+            // register handlers
+            connection.addHandler(onMessage, null, "message", "chat");
+
+            trigger("connected");
         }
 
-        return null;
+        return true;
     }
 
-    /* Register Strophe callbacks */
-    this._registerCallbacks = function() {
-        connection.addHandler(this.onMessage,
-                              null,
-                              "message",
-                              null,
-                              null,
-                              null,
-                              null);
+    function onDisconnect(status) {
+        if (status == Strophe.Status.DISCONNECTED) {
+            _user = null;
+            _server = null;
+            connection = null;
+            _active_chats = {};
 
-        connection.addHandler(this.onSubscription,
-                              null,
-                              "presence",
-                              "subscribe",
-                              null,
-                              null,
-                              null);
+            jtalk.me = null;
+        }
 
-        connection.addHandler(this.onRosterReceived,
-                              Strophe.NS.ROSTER,
-                              "iq",
-                              null,
-                              null,
-                              null,
-                              null);
+        return true;
     }
-}
+
+    this.connect = function(server, user, password, callback) {
+        _user = user;
+        _server = server;
+
+        connection = new Strophe.Connection(server);
+        connection.connect(user, password, onConnect);
+    }
+
+    this.disconnect = function() {
+        connection.disconnect(onDisconnect);
+    }
+})();
