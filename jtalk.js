@@ -453,4 +453,23 @@ var JTalk = new (function() {
     this.disconnect = function() {
         connection.disconnect(onDisconnect);
     }
+
+    this.show = function(show) {
+        var rfc_3921_show_values = [
+            "away",
+            "chat",
+            "dnd",
+            "xa"
+        ];
+
+        if (rfc_3921_show_values.indexOf(show) >= 0) {
+            connection.send($pres().c("show", show));
+            this.me._setShow(show);
+        }
+    }
+
+    this.status = function(status) {
+        connection.send($pres().c("status", status));
+        this.me._setStatus(status);
+    }
 })();
