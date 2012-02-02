@@ -75,16 +75,17 @@ var JTalk = new (function() {
             this.group = group ? group : null;
 
             // normalize subscription to the four known values
-            switch (subscription) {
-                case "to":
-                case "from":
-                case "both":
-                case "none":
-                    this.subscription = subscription;
-                    break;
-                default:
-                    this.subscription = "none";
-                    break;
+            var rfc_3921_subscription_values = [
+                "to",
+                "from",
+                "both",
+                "none",
+            ]
+
+            if (rfc_3921_subscription_values.indexOf(subscription)) {
+                this.subscription = subscription;
+            } else if (!subscription) {
+                this.subscription = "none";
             }
 
             this.presence = null;
