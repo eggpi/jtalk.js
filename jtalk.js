@@ -247,14 +247,14 @@ var JTalk = new (function() {
     }
 
     this.Chat = function(contact) {
+        if (_active_chats[contact.jid]) {
+            return _active_chats[contact.jid];
+        }
+
         return new (function () {
             var self = this;
             var _history = [];
             var _chatstates = {}; // jid -> chatstate
-
-            if (_active_chats[contact.jid]) {
-                return _active_chats[contact.jid];
-            }
 
             /* Send a message with chatstate support */
             function _send(message, chatstate) {
@@ -272,40 +272,26 @@ var JTalk = new (function() {
                 connection.send(elem);
             }
 
-            // callback for messages sent to this chat
-            function onMessage(message) {
-                var body = $(message).find("body:first");
-
-                if (body.length != 0) {
-                    var text = body.text();
-                    var keep = trigger("incoming message",
-                                       self,
-                                       {from: contact, message: text});
+            /* Internal function for receiving chat messages.
+             * Expects the message in object notation.
+             */
+            this._recv = function(message) {
+                if (message.text) {
+                    var obj = {from: contact, message: message.text};
+                    var keep = trigger("incoming message", self, obj);
 
                     if (keep !== false) {
-                        self.history(contact.jid, text);
+                        self.history(message.from.jid, message.text);
                     }
                 }
 
-                // select the tag corresponding to the chat state
-                var selector = [
-                    "*[xmlns='",
-                    Strophe.NS.CHATSTATE,
-                    "']"
-                ].join("");
-
-                var tag = $(message).find(selector);
-                if (tag.length != 0) {
-                    var chatstate = tag.prop("tagName");
-                    _chatstates[contact.jid] = chatstate;
-
+                if (message.chatstate) {
+                    _chatstates[message.from.jid] = message.chatstate;
                     trigger("incoming chat state",
                             self,
-                            contact,
-                            chatstate);
+                            message.from,
+                            message.chatstate);
                 }
-
-                return true;
             }
 
             this.send = function(message) {
@@ -353,13 +339,6 @@ var JTalk = new (function() {
             }
 
             _active_chats[contact.jid] = this;
-            connection.addHandler(onMessage,
-                                  null,
-                                  "message",
-                                  "chat",
-                                  null,
-                                  contact.jid,
-                                  {matchBare: true});
         })();
     }
 
@@ -372,14 +351,36 @@ var JTalk = new (function() {
 
     var onMessage = wca(
         function(message, attrs) {
+            // parse message attributes and add them to 'attrs'
+            var body = $(message).find("body:first");
             var jid = Strophe.getBareJidFromJid(attrs.from);
-            var contact = jtalk.Roster.get(jid);
 
-            if (contact && !_active_chats[jid]) {
-                if (trigger("chat requested", contact) !== false) {
-                    /* FIXME: should trigger "incoming message" after this */
-                    jtalk.Chat(contact);
+            attrs.text = null;
+            if (body.length != 0) {
+                attrs.text = body.text();
+            }
+
+            // select the tag corresponding to the chat state
+            var selector = [
+                "*[xmlns='",
+                Strophe.NS.CHATSTATE,
+                "']"
+            ].join("");
+
+            attrs.chatstate = null;
+            var tag = $(message).find(selector);
+            if (tag.length != 0) {
+                attrs.chatstate = tag.prop("tagName");
+            }
+
+            attrs.from = jtalk.Roster.get(jid);
+            if (attrs.from) {
+                if (!_active_chats[jid]) {
+                    var accept = trigger("chat requested", attrs.from);
+                    if (accept === false) return;
                 }
+
+                jtalk.Chat(attrs.from)._recv(attrs);
             }
 
             return true;
