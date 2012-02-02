@@ -68,9 +68,9 @@ var JTalk = new (function() {
     var trigger = this.Events._trigger;
 
     /* Contact constructor */
-    function Contact(jid, name, group, subscription, presence) {
-        this._update = function(jid, name, group, subscription, presence) {
-            this.jid = Strophe.getBareJidFromJid(jid);
+    function Contact(jid, name, group, subscription) {
+        this._update = function(jid, name, group, subscription) {
+            this.jid = jid ? Strophe.getBareJidFromJid(jid) : this.jid;
             this.name = name ? name : null;
             this.group = group ? group : null;
 
@@ -87,11 +87,28 @@ var JTalk = new (function() {
                     break;
             }
 
-            if (presence) this.presence = presence;
-            else if (!this.presence) this.presence = null;
+            this.presence = null;
         }
 
-        this._update(jid, name, group, subscription, presence);
+        this._setShow = function(show) {
+            if (!this.presence) {
+                this.presence = {};
+            }
+
+            this.presence.show = show;
+        }
+
+        this._setStatus = function(status) {
+            if (!this.presence) {
+                this.presence = {};
+            }
+
+            this.presence.status = status;
+        }
+
+        // require at least jid when creating
+        if (!jid) return null;
+        this._update(jid, name, group, subscription);
     }
 
     /* The Roster object. Created after connection. */
