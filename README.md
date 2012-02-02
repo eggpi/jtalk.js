@@ -297,5 +297,19 @@ The events raised by the core chat client are described below.
 
         The return value of the handler is ignored.
 
+    "contact available"
+        Triggered when a contact becomes available.
+
+        Handler signature: handler(contact)
+            contact, Contact, the contact that became available.
+
+    "contact unavailable"
+        Triggered when a contact becomes unavailable.
+
+        Handler signature: handler(contact)
+            contact, Contact, the contact that became unavailable.
+
+        The return value of the handler is ignored.
+
 [RFC3921]: http://xmpp.org/rfcs/rfc3921.html
 [XEP0085]: http://xmpp.org/extensions/xep-0085.html

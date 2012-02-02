@@ -91,17 +91,19 @@ var JTalk = new (function() {
             this.presence = null;
         }
 
+        var self = this;
+
         function _setPresenceAttr(name, value) {
             if (!this.presence) {
-                this.presence = {};
+                self.presence = {};
             }
 
             if (value) {
-                this.presence[name] = value;
+                self.presence[name] = value;
             } else {
                 delete this.presence[name];
                 if ($.isEmptyObject(this.presence)) {
-                    this.presence = null;
+                    self.presence = null;
                 }
             }
         }
@@ -412,6 +414,55 @@ var JTalk = new (function() {
         }
     );
 
+    var onPresence = wca(
+        function(presence, attrs) {
+            var jid = Strophe.getBareJidFromJid(attrs.from);
+            var contact = jtalk.Roster.get(jid);
+
+            if (!contact) return true;
+
+            switch (attrs.type) {
+                case "unavailable":
+                    trigger("contact unavailable", contact);
+                    break;
+
+                case "subscribe":
+                    var type = "unsubscribed";
+
+                    if (trigger("incoming subscription", contact) === true) {
+                        type = "subscribed";
+                    }
+
+                    connection.send($pres({to: jid, type: type}));
+                    break;
+
+                case "unsubscribed":
+                    trigger("subscription denied", contact);
+                    break;
+
+                case "probe":
+                case "error":
+                case "subscribed":
+                    return true;
+            }
+
+            var show = $(presence).find("show").text();
+            if (show) contact._setShow(show);
+
+            var status = $(presence).find("status").text();
+            if (status) contact._setStatus(status);
+
+            if (show || status) {
+                trigger("contact changed", contact);
+            } else if (!attrs.type) {
+                // no show, status or type, assume it's initial presence
+                trigger("contact available", contact);
+            }
+
+            return true;
+        }
+    );
+
     function onConnect(status) {
         if (status == Strophe.Status.CONNECTED) {
             jtalk.me = new Contact(_user);
@@ -422,6 +473,7 @@ var JTalk = new (function() {
 
             // register handlers
             connection.addHandler(onMessage, null, "message", "chat");
+            connection.addHandler(onPresence, null, "presence");
 
             trigger("connected");
         }
