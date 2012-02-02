@@ -91,20 +91,27 @@ var JTalk = new (function() {
             this.presence = null;
         }
 
-        this._setShow = function(show) {
+        function _setPresenceAttr(name, value) {
             if (!this.presence) {
                 this.presence = {};
             }
 
-            this.presence.show = show;
+            if (value) {
+                this.presence[name] = value;
+            } else {
+                delete this.presence[name];
+                if ($.isEmptyObject(this.presence)) {
+                    this.presence = null;
+                }
+            }
+        }
+
+        this._setShow = function(show) {
+            _setPresenceAttr("show", show);
         }
 
         this._setStatus = function(status) {
-            if (!this.presence) {
-                this.presence = {};
-            }
-
-            this.presence.status = status;
+            _setPresenceAttr("status", status);
         }
 
         // require at least jid when creating
